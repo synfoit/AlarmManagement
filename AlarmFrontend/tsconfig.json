@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "lib": ["DOM", "ESNext"],
+    "jsx": "react-jsx", // ← enable JSX in .tsx
+    "moduleResolution": "Node",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true, // ← allow default-import of CommonJS
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "noEmit": true, // we let Vite handle the build output
+    "isolatedModules": true // required by Vite
+  },
+  "include": ["src", "vite-env.d.ts"], // pick up your code + Vite types
+  "exclude": ["node_modules", "dist"] // don’t type check these
+}

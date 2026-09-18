@@ -1,0 +1,42 @@
+@font-face {
+  font-family: "Poppins";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/Poppins/Poppins-Light.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Poppins";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/Poppins/Poppins-Medium.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Poppins";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/Poppins/Poppins-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Poppins";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/Poppins/Poppins-Bold.ttf") format("truetype");
+}
+
+/* then your Tailwind layers */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* apply it globally */
+  html,
+  body {
+    font-family: "Poppins", ui‑sans‑serif, system-ui, sans-serif;
+    @apply tracking-wide;
+  }
+}
