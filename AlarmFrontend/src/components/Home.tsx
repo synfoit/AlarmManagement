@@ -1,1136 +1,645 @@
-/* src/pages/Home.tsx */
-import React, { useEffect, useMemo, useState, type JSX } from 'react';
+// src/pages/summary.tsx
+
+import React, { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Chart from 'react-apexcharts';
 import type { ApexOptions } from 'apexcharts';
 import {
-  AlertTriangle,
-  Bell,
-  RefreshCw,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  Layers,
   Activity,
-  Zap,
-  ListChecks,
-  BarChart3,
-  ChevronDown,
+  AlertTriangle,
+  BellRing,
+  BellOff,
+  Gauge,
+  RefreshCw,
+  Server,
+  ArrowUpRight,
 } from 'lucide-react';
-import { createCrudApi } from '../features/lib/createCrudApi';
+
 /* ------------------------------------------------------------------ */
-/* Types — mirror the AlarmKPI API response */
+/* Routes - tamara router pramane path change kari lejo */
 /* ------------------------------------------------------------------ */
-interface AlarmSummary {
-  totalAlarmActivations: number;
-  mttA_Minutes: number;
-  mttR_Minutes: number;
-  acknowledgedAlarms: number;
-  unacknowledgedAlarms: number;
-  resolvedAlarms: number;
-  unresolvedAlarms: number;
-  alarmRatePerHour: number;
-}
-interface StandingAlarm {
-  eventID: string;
-  sourceName: string;
-  conditionName: string;
-  subConditionName: string;
-  activeSince: string;
-  standingMinutes: number;
-  severity: number;
-  priority: number;
-  acked: boolean;
-  message: string;
-  groupPath: string;
-}
-interface ChatteringAlarm {
-  sourceName: string;
-  conditionName: string;
-  subConditionName: string;
-  stateChangeCount: number;
-  firstChange: string;
-  lastChange: string;
-  durationSeconds: number;
-}
-interface BadActor {
-  sourceName: string;
-  conditionName: string;
-  subConditionName: string;
-  alarmCount: number;
-  unacknowledgedCount: number;
-  unresolvedCount: number;
-  avgMTTA_Minutes: number | null;
-  avgMTTR_Minutes: number | null;
-}
-interface AlarmRateByHour {
-  alarmHour: string;
-  alarmCount: number;
-}
-interface AlarmKpiResponse {
-  summary: AlarmSummary;
-  standingAlarms: StandingAlarm[];
-  chatteringAlarms: ChatteringAlarm[];
-  badActors: BadActor[];
-  alarmRateByHour: AlarmRateByHour[];
-}
-type NavKey =
-  | 'overview'
-  | 'live'
-  | 'history'
-  | 'analysis'
-  | 'chattering'
-  | 'standing'
-  | 'badActors'
-  | 'reports';
+
+const LIVE_PATH = '/live-dashboard';
+const KPI_PATH = '/alarm-kpi-dashboard';
+
 /* ------------------------------------------------------------------ */
-/* Config */
+/* Static data - pachi API thi replace karvanu */
 /* ------------------------------------------------------------------ */
-/* NOTE: this follows the exact same call pattern used in BlenderMaster.tsx
- * (createCrudApi(resource) + Api.get<T>('Action?query=..')).
- * If the actual backend action name for this resource is different
- * (e.g. "GetAlarmKPI" instead of calling the resource root directly),
- * just change the string inside Api.get<AlarmKpiResponse>(...) below. */
-const RESOURCE_NAME = 'AlarmKPI';
-export const NAV_ITEMS: {
-  key: NavKey;
-  label: string;
-  icon: JSX.Element;
-}[] = [
+
+type CollectorStatus = 'Online' | 'Offline' | 'Degraded';
+
+interface Collector {
+  id: number;
+  name: string;
+  status: CollectorStatus;
+  activeAlarms: number;
+  unacked: number;
+  lastUpdate: string;
+}
+
+const COLLECTORS: Collector[] = [
   {
-    key: 'overview',
-    label: 'Overview',
-    icon: <Layers size={18} />,
+    id: 1,
+    name: 'Plant A - Boiler DCS',
+    status: 'Online',
+    activeAlarms: 14,
+    unacked: 4,
+    lastUpdate: '2 sec ago',
   },
   {
-    key: 'live',
-    label: 'Live Alarms',
-    icon: <Bell size={18} />,
+    id: 2,
+    name: 'Plant A - Turbine',
+    status: 'Online',
+    activeAlarms: 6,
+    unacked: 1,
+    lastUpdate: '3 sec ago',
   },
   {
-    key: 'history',
-    label: 'History',
-    icon: <Clock size={18} />,
+    id: 3,
+    name: 'Plant B - Compressor',
+    status: 'Degraded',
+    activeAlarms: 21,
+    unacked: 9,
+    lastUpdate: '48 sec ago',
   },
   {
-    key: 'analysis',
-    label: 'Analysis',
-    icon: <Activity size={18} />,
+    id: 4,
+    name: 'Plant B - Utilities',
+    status: 'Online',
+    activeAlarms: 3,
+    unacked: 0,
+    lastUpdate: '1 sec ago',
   },
   {
-    key: 'chattering',
-    label: 'Chattering',
-    icon: <Zap size={18} />,
-  },
-  {
-    key: 'standing',
-    label: 'Standing',
-    icon: <ListChecks size={18} />,
-  },
-  {
-    key: 'badActors',
-    label: 'Bad Actors',
-    icon: <AlertTriangle size={18} />,
-  },
-  {
-    key: 'reports',
-    label: 'Reports',
-    icon: <BarChart3 size={18} />,
+    id: 5,
+    name: 'Tank Farm',
+    status: 'Offline',
+    activeAlarms: 0,
+    unacked: 0,
+    lastUpdate: '12 min ago',
   },
 ];
-[] = [
+
+const HEALTH_SCORE = 82;
+
+const ALARMS_PER_HOUR = [
+  12, 9, 7, 6, 8, 11, 18, 26, 34, 29, 22, 19, 24, 31, 27, 21, 18, 23, 28, 20,
+  15, 13, 10, 8,
+];
+
+const PRIORITY = [
+  { key: 'Critical', value: 8, color: '#DC2626' },
+  { key: 'High', value: 22, color: '#F97316' },
+  { key: 'Medium', value: 41, color: '#F59E0B' },
+  { key: 'Low', value: 29, color: '#10B981' },
+];
+
+const BAD_ACTORS = [
+  { name: 'FIC-1012.PV_HI', count: 86 },
+  { name: 'TIC-2204.DEV', count: 64 },
+  { name: 'LIC-3301.PV_LO', count: 51 },
+  { name: 'PIC-1105.PV_HI', count: 39 },
+  { name: 'FIC-1020.BAD_PV', count: 27 },
+];
+
+const RECENT_ALARMS = [
   {
-    key: 'overview',
-    label: 'Overview',
-    icon: <Layers size={18} />,
+    time: '14:32:08',
+    source: 'PIC-1105.PV_HI',
+    message: 'Pressure high',
+    priority: 1,
   },
   {
-    key: 'live',
-    label: 'Live Alarms',
-    icon: <Bell size={18} />,
+    time: '14:31:47',
+    source: 'TIC-2204.DEV',
+    message: 'Temperature deviation',
+    priority: 2,
   },
   {
-    key: 'history',
-    label: 'History',
-    icon: <Clock size={18} />,
+    time: '14:29:12',
+    source: 'LIC-3301.PV_LO',
+    message: 'Level low',
+    priority: 2,
   },
   {
-    key: 'analysis',
-    label: 'Analysis',
-    icon: <Activity size={18} />,
+    time: '14:26:55',
+    source: 'FIC-1012.PV_HI',
+    message: 'Flow high',
+    priority: 3,
   },
   {
-    key: 'chattering',
-    label: 'Chattering',
-    icon: <Zap size={18} />,
-  },
-  {
-    key: 'standing',
-    label: 'Standing',
-    icon: <ListChecks size={18} />,
-  },
-  {
-    key: 'badActors',
-    label: 'Bad Actors',
-    icon: <AlertTriangle size={18} />,
-  },
-  {
-    key: 'reports',
-    label: 'Reports',
-    icon: <BarChart3 size={18} />,
+    time: '14:21:30',
+    source: 'XV-4410.FAIL',
+    message: 'Valve feedback fail',
+    priority: 3,
   },
 ];
-const SEVERITY_MAP: Record<
-  number,
-  {
-    label: string;
-    color: string;
-    bg: string;
-    text: string;
-  }
-> = {
-  1: {
-    label: 'Emergency',
-    color: '#DC2626',
-    bg: 'bg-red-100',
-    text: 'text-red-700',
-  },
-  2: {
-    label: 'Critical',
-    color: '#DC2626',
-    bg: 'bg-red-100',
-    text: 'text-red-700',
-  },
-  251: {
-    label: 'Advisory',
-    color: '#2563EB',
-    bg: 'bg-blue-100',
-    text: 'text-blue-700',
-  },
-  501: {
-    label: 'Warning',
-    color: '#D97706',
-    bg: 'bg-amber-100',
-    text: 'text-amber-700',
-  },
-};
-function severityInfo(sev: number) {
-  return (
-    SEVERITY_MAP[sev] ?? {
-      label: `Sev ${sev}`,
-      color: '#6B7280',
-      bg: 'bg-gray-100',
-      text: 'text-gray-700',
-    }
-  );
-}
-function priorityBadge(priority: number) {
-  const map: Record<number, string> = {
-    1: 'bg-red-100 text-red-700',
-    2: 'bg-orange-100 text-orange-700',
-    3: 'bg-amber-100 text-amber-700',
-    4: 'bg-sky-100 text-sky-700',
-  };
-  return map[priority] ?? 'bg-gray-100 text-gray-700';
-}
+
 /* ------------------------------------------------------------------ */
-/* Small presentational helpers */
+/* Helpers */
 /* ------------------------------------------------------------------ */
-function KpiCard({
-  label,
-  value,
-  suffix,
-  delta,
-  icon,
-  accent,
-}: {
-  label: string;
-  value: string | number;
-  suffix?: string;
-  delta?: string;
-  icon: JSX.Element;
-  accent: 'red' | 'amber' | 'blue' | 'green' | 'slate';
-}) {
-  const accents: Record<string, string> = {
-    red: 'border-l-red-500 text-red-600 bg-red-50',
-    amber: 'border-l-amber-500 text-amber-600 bg-amber-50',
-    blue: 'border-l-blue-500 text-blue-600 bg-blue-50',
-    green: 'border-l-emerald-500 text-emerald-600 bg-emerald-50',
-    slate: 'border-l-slate-400 text-slate-600 bg-slate-50',
-  };
-  return (
-    <div
-      className={`rounded-lg border border-slate-200 border-l-4 bg-white p-4 shadow-sm ${accents[accent].split(' ')[0]}`}
-    >
-      {' '}
-      <div className="flex items-start justify-between">
-        {' '}
-        <div>
-          {' '}
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            {' '}
-            {label}
-          </p>{' '}
-          <p className="mt-1 text-2xl font-semibold text-slate-800">
-            {' '}
-            {value}
-            {suffix && (
-              <span className="ml-1 text-sm font-normal text-slate-400">
-                {' '}
-                {suffix}
-              </span>
-            )}
-          </p>{' '}
-          {delta && <p className="mt-1 text-xs text-slate-400">{delta}</p>}
-        </div>{' '}
-        <div
-          className={`rounded-md p-2 ${accents[accent].split(' ').slice(1).join(' ')}`}
-        >
-          {' '}
-          {icon}
-        </div>{' '}
-      </div>{' '}
-    </div>
-  );
+
+function statusClasses(status: CollectorStatus) {
+  if (status === 'Online')
+    return {
+      pill: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      dot: 'bg-emerald-500',
+    };
+  if (status === 'Degraded')
+    return {
+      pill: 'bg-amber-50 text-amber-700 border-amber-200',
+      dot: 'bg-amber-500',
+    };
+  return { pill: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500' };
 }
+
+function priorityClass(p: number) {
+  if (p === 1) return 'border-red-200 bg-red-50 text-red-700';
+  if (p === 2) return 'border-amber-200 bg-amber-50 text-amber-700';
+  if (p === 3) return 'border-blue-200 bg-blue-50 text-blue-700';
+  return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+}
+
+function healthMeta(score: number) {
+  if (score >= 80)
+    return { label: 'Healthy', color: '#10B981', text: 'text-emerald-600' };
+  if (score >= 60)
+    return {
+      label: 'Needs attention',
+      color: '#F59E0B',
+      text: 'text-amber-600',
+    };
+  return { label: 'Critical', color: '#DC2626', text: 'text-red-600' };
+}
+
 function SectionCard({
   title,
+  subtitle,
   action,
   children,
   className = '',
 }: {
   title: string;
-  action?: JSX.Element;
+  subtitle?: string;
+  action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <div
-      className={`rounded-lg border border-slate-200 bg-white p-4 shadow-sm ${className}`}
+      className={`rounded-md border border-slate-200 bg-white p-4 shadow-sm ${className}`}
     >
-      {' '}
-      <div className="mb-3 flex items-center justify-between">
-        {' '}
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
-          {' '}
-          {title}
-        </h2>{' '}
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div>
+          <h2 className="text-[16px] font-semibold text-slate-700">{title}</h2>
+          {subtitle && (
+            <p className="mt-0.5 text-[12px] text-slate-400">{subtitle}</p>
+          )}
+        </div>
         {action}
-      </div>{' '}
+      </div>
       {children}
     </div>
   );
 }
-function EmptyState({
-  message = 'Data not available',
-  height = 160,
+
+function StatTile({
+  label,
+  value,
+  hint,
+  icon: Icon,
+  iconClass,
 }: {
-  message?: string;
-  height?: number;
+  label: string;
+  value: string | number;
+  hint: string;
+  icon: React.ElementType;
+  iconClass: string;
 }) {
   return (
-    <div
-      className="flex flex-col items-center justify-center gap-2 text-slate-400"
-      style={{
-        minHeight: height,
-      }}
-    >
-      {' '}
-      <AlertTriangle size={20} className="text-slate-300" />{' '}
-      <p className="text-xs font-medium">{message}</p>{' '}
+    <div className="flex items-center gap-3 rounded-md border border-slate-200 bg-white p-3.5 shadow-sm">
+      <div
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${iconClass}`}
+      >
+        <Icon size={20} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[13px] font-medium text-slate-500">{label}</p>
+        <p className="text-[26px] font-bold leading-tight text-slate-800">
+          {value}
+        </p>
+        <p className="truncate text-[11px] text-slate-400">{hint}</p>
+      </div>
     </div>
   );
 }
-function LoadingState({
-  message = 'Loading...',
-  height = 160,
-}: {
-  message?: string;
-  height?: number;
-}) {
-  return (
-    <div
-      className="flex flex-col items-center justify-center gap-2 text-slate-400"
-      style={{
-        minHeight: height,
-      }}
-    >
-      {' '}
-      <RefreshCw size={20} className="animate-spin text-blue-400" />{' '}
-      <p className="text-xs font-medium">{message}</p>{' '}
-    </div>
-  );
-}
-function fmtTime(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-}
-function fmtDuration(mins: number) {
-  const h = Math.floor(mins / 60);
-  const m = Math.round(mins % 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
-function fmtNum(n: number | null | undefined, digits = 2) {
-  if (n === null || n === undefined || Number.isNaN(n)) return '—';
-  return n.toFixed(digits);
-}
+
 /* ------------------------------------------------------------------ */
-/* Main component */
+/* Main */
 /* ------------------------------------------------------------------ */
-export default function Home(): JSX.Element {
-  const Api = React.useMemo(() => createCrudApi(RESOURCE_NAME), []);
-  const [data, setData] = useState<AlarmKpiResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  function toDatetimeLocalValue(d: Date) {
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
-  const now = new Date();
-  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const [fromDate, setFromDate] = useState(toDatetimeLocalValue(yesterday));
-  const [toDate, setToDate] = useState(toDatetimeLocalValue(new Date()));
-  const [source, setSource] = useState('All Sources');
-  async function fetchData() {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({
-        fromDate: fromDate.replace('T', ' ') + ':00',
-        toDate: toDate.replace('T', ' ') + ':00',
-        standingMinutes: '30',
-        chatteringWindowMinutes: '10',
-        chatteringMinChanges: '5',
-        topBadActors: '10',
-      });
-      /* Same call pattern as BlenderMaster.tsx (Api.get<T>('Action?query')) */
-      const res = await Api.get<AlarmKpiResponse>(`?${params.toString()}`);
-      const json = res?.data;
-      if (!json) {
-        throw new Error('Empty response from server');
-      }
-      setData(json);
-    } catch (err) {
-      console.error('AlarmKPI fetch failed:', err);
-      setError(
-        err instanceof Error ? err.message : 'Failed to load alarm data'
-      );
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }
-  useEffect(() => {
-    fetchData();
-    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+
+export default function Summary() {
+  const navigate = useNavigate();
+
+  const totals = useMemo(() => {
+    const online = COLLECTORS.filter((c) => c.status !== 'Offline').length;
+    const active = COLLECTORS.reduce((s, c) => s + c.activeAlarms, 0);
+    const unacked = COLLECTORS.reduce((s, c) => s + c.unacked, 0);
+    const today = ALARMS_PER_HOUR.reduce((s, n) => s + n, 0);
+    return { online, active, unacked, today };
   }, []);
-  useEffect(() => {
-    if (!autoRefresh) return;
-    const id = setInterval(fetchData, 60_000);
-    return () => clearInterval(id);
-    /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [autoRefresh, fromDate, toDate]);
-  const hasData = !!data;
-  const summary = data?.summary ?? null;
-  const standingAlarms = data?.standingAlarms ?? [];
-  const chatteringAlarms = data?.chatteringAlarms ?? [];
-  const badActors = data?.badActors ?? [];
-  const alarmRateByHour = data?.alarmRateByHour ?? [];
-  const severityPie = useMemo(() => {
-    const counts = new Map<
-      string,
-      {
-        count: number;
-        color: string;
-      }
-    >();
-    standingAlarms.forEach((a) => {
-      const info = severityInfo(a.severity);
-      const prev = counts.get(info.label);
-      counts.set(info.label, {
-        count: (prev?.count ?? 0) + 1,
-        color: info.color,
-      });
-    });
-    return Array.from(counts.entries()).map(([name, v]) => ({
-      name,
-      value: v.count,
-      color: v.color,
-    }));
-  }, [standingAlarms]);
-  const groupPathBars = useMemo(() => {
-    const counts = new Map<string, number>();
-    standingAlarms.forEach((a) =>
-      counts.set(a.groupPath, (counts.get(a.groupPath) ?? 0) + 1)
+
+  const health = healthMeta(HEALTH_SCORE);
+
+  const openDashboard = (path: string, c: Collector) =>
+    navigate(
+      `${path}?collectorId=${c.id}&collectorName=${encodeURIComponent(c.name)}`
     );
-    return Array.from(counts.entries()).map(([name, count]) => ({
-      name,
-      count,
-    }));
-  }, [standingAlarms]);
-  const groupMax = useMemo(
-    () => groupPathBars.reduce((m, g) => Math.max(m, g.count), 0),
-    [groupPathBars]
-  );
-  /* 24-hour labels; show the date only when the day actually changes
-   * (or on the very first point), otherwise just show HH:00. */
-  const rateChartData = useMemo(() => {
-    let prevDateKey: string | null = null;
-    return alarmRateByHour.map((r, idx) => {
-      const d = new Date(r.alarmHour);
-      const dateKey = d.toDateString();
-      const hh = d.getHours().toString().padStart(2, '0');
-      const timeLabel = `${hh}:00`;
-      let label = timeLabel;
-      if (idx === 0 || dateKey !== prevDateKey) {
-        const dd = d.getDate().toString().padStart(2, '0');
-        const mm = (d.getMonth() + 1).toString().padStart(2, '0');
-        label = `${dd}/${mm} ${timeLabel}`;
-      }
-      prevDateKey = dateKey;
-      return {
-        hour: label,
-        count: r.alarmCount,
-      };
-    });
-  }, [alarmRateByHour]);
-  /* ---------------- ApexCharts configs ---------------- */
-  const rateBarOptions: ApexOptions = {
+
+  /* ---------------- Charts ---------------- */
+
+  const gaugeOptions: ApexOptions = {
     chart: {
-      type: 'bar',
-      toolbar: {
-        show: true,
-        tools: {
-          zoom: true,
-          zoomin: true,
-          zoomout: true,
-          pan: true,
-          reset: true,
+      type: 'radialBar',
+      fontFamily: 'inherit',
+      sparkline: { enabled: true },
+    },
+    colors: [health.color],
+    plotOptions: {
+      radialBar: {
+        startAngle: -120,
+        endAngle: 120,
+        hollow: { size: '68%' },
+        track: { background: '#E2E8F0', strokeWidth: '100%' },
+        dataLabels: {
+          name: { show: true, offsetY: 24, color: '#94A3B8', fontSize: '13px' },
+          value: {
+            offsetY: -14,
+            fontSize: '38px',
+            fontWeight: 700,
+            color: '#1E293B',
+            formatter: (v: number) => `${v}%`,
+          },
         },
       },
+    },
+    stroke: { lineCap: 'round' },
+    labels: [health.label],
+  };
+
+  const hourlyOptions: ApexOptions = {
+    chart: {
+      type: 'area',
+      toolbar: { show: false },
       fontFamily: 'inherit',
-      zoom: {
-        enabled: true,
-        type: 'x',
-        autoScaleYaxis: true,
-      },
+      zoom: { enabled: false },
     },
     colors: ['#2563EB'],
-    plotOptions: {
-      bar: {
-        borderRadius: 4,
-        columnWidth: '50%',
+    stroke: { curve: 'smooth', width: 2.5 },
+    fill: {
+      type: 'gradient',
+      gradient: {
+        shadeIntensity: 1,
+        opacityFrom: 0.35,
+        opacityTo: 0.02,
+        stops: [0, 100],
       },
     },
-    dataLabels: {
-      enabled: false,
-    },
-    grid: {
-      borderColor: '#E2E8F0',
-      strokeDashArray: 3,
-      yaxis: {
-        lines: {
-          show: true,
-        },
-      },
-    },
+    dataLabels: { enabled: false },
+    grid: { borderColor: '#E2E8F0', strokeDashArray: 3 },
     xaxis: {
-      categories: rateChartData.map((d) => d.hour),
-      labels: {
-        style: {
-          colors: '#94A3B8',
-          fontSize: '11px',
-        },
-        rotate: -45,
-        rotateAlways: false,
-      },
-      axisBorder: {
-        show: false,
-      },
-      axisTicks: {
-        show: false,
-      },
+      categories: ALARMS_PER_HOUR.map(
+        (_, i) => `${String(i).padStart(2, '0')}:00`
+      ),
+      tickAmount: 8,
+      labels: { rotate: 0, style: { colors: '#94A3B8', fontSize: '12px' } },
+      axisBorder: { show: false },
+      axisTicks: { show: false },
     },
     yaxis: {
       min: 0,
-      forceNiceScale: true,
       labels: {
-        style: {
-          colors: '#94A3B8',
-          fontSize: '11px',
-        },
-        formatter: (val: number) => Math.round(val).toString(),
+        style: { colors: '#94A3B8', fontSize: '12px' },
+        formatter: (v: number) => Math.round(v).toString(),
       },
     },
-    tooltip: {
-      theme: 'light',
-    },
+    tooltip: { theme: 'light', y: { formatter: (v: number) => `${v} alarms` } },
   };
-  const rateBarSeries = [
-    {
-      name: 'Alarms',
-      data: rateChartData.map((d) => d.count),
-    },
-  ];
-  const severityDonutOptions: ApexOptions = {
-    chart: {
-      type: 'donut',
-      fontFamily: 'inherit',
-    },
-    labels: severityPie.map((s) => s.name),
-    colors: severityPie.map((s) => s.color),
-    dataLabels: {
-      enabled: false,
-    },
-    legend: {
-      show: false,
-    },
-    stroke: {
-      width: 2,
-      colors: ['#fff'],
-    },
+
+  const priorityOptions: ApexOptions = {
+    chart: { type: 'donut', fontFamily: 'inherit' },
+    labels: PRIORITY.map((p) => p.key),
+    colors: PRIORITY.map((p) => p.color),
+    dataLabels: { enabled: false },
+    legend: { show: false },
+    stroke: { width: 2, colors: ['#fff'] },
     plotOptions: {
       pie: {
         donut: {
-          size: '65%',
+          size: '66%',
+          labels: {
+            show: true,
+            total: {
+              show: true,
+              label: 'Active',
+              color: '#94A3B8',
+              fontSize: '13px',
+              formatter: () => String(totals.active),
+            },
+            value: { fontSize: '26px', fontWeight: 700, color: '#1E293B' },
+          },
         },
       },
     },
-    tooltip: {
-      theme: 'light',
+    states: {
+      hover: { filter: { type: 'none' } },
+      active: { filter: { type: 'none' } },
     },
+    tooltip: { theme: 'light', y: { formatter: (v: number) => `${v}%` } },
   };
-  const severityDonutSeries = severityPie.map((s) => s.value);
-  const groupBarOptions: ApexOptions = {
-    chart: {
-      type: 'bar',
-      toolbar: {
-        show: true,
-        tools: {
-          zoom: true,
-          zoomin: true,
-          zoomout: true,
-          pan: true,
-          reset: true,
-        },
-      },
-      fontFamily: 'inherit',
-      zoom: {
-        enabled: true,
-        type: 'x',
-      },
-    },
-    colors: ['#2563EB'],
-    plotOptions: {
-      bar: {
-        borderRadius: 4,
-        columnWidth: '45%',
-      },
-    },
-    dataLabels: {
-      enabled: false,
-    },
-    grid: {
-      borderColor: '#E2E8F0',
-      strokeDashArray: 3,
-    },
-    xaxis: {
-      categories: groupPathBars.map((g) => g.name),
-      labels: {
-        style: {
-          colors: '#94A3B8',
-          fontSize: '11px',
-        },
-      },
-      axisBorder: {
-        show: false,
-      },
-      axisTicks: {
-        show: false,
-      },
-    },
-    yaxis: {
-      min: 0,
-      /* Explicit max/tickAmount so the axis always reflects the real
-       * data range instead of getting stuck at a stale default (e.g. 6)
-       * when the max count is actually higher (e.g. 14). */
-      max:
-        groupMax > 0 ? groupMax + Math.max(1, Math.ceil(groupMax * 0.15)) : 5,
-      tickAmount: groupMax > 0 ? Math.min(groupMax, 6) : undefined,
-      forceNiceScale: true,
-      labels: {
-        style: {
-          colors: '#94A3B8',
-          fontSize: '11px',
-        },
-        formatter: (val: number) => Math.round(val).toString(),
-      },
-    },
-    tooltip: {
-      theme: 'light',
-    },
-  };
-  const groupBarSeries = [
-    {
-      name: 'Alarms',
-      data: groupPathBars.map((g) => g.count),
-    },
-  ];
+
+  const maxActor = Math.max(...BAD_ACTORS.map((a) => a.count));
+
+  /* ---------------- UI ---------------- */
+
   return (
-    <>
-      {' '}
-      {/* ---------------- Main ---------------- */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        {' '}
-        {/* Top bar */}
-        <header className="flex min-h-[56px] flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm">
-          {' '}
-          {/* ================================================= LEFT SIDE - TITLE ================================================= */}
-          <div className="flex min-w-[220px] items-center gap-2">
-            {' '}
-            {/* <AlertTriangle className="text-red-500" size={20} /> */}
-            <div>
-              {' '}
-              <div className="text-base font-semibold text-slate-700">
-                {' '}
-                Alarm Dashboard{' '}
-              </div>{' '}
-              <div className="text-[10px] text-slate-400">
-                {' '}
-                Alarm Management System{' '}
-              </div>{' '}
-            </div>{' '}
-          </div>{' '}
-          {/* ================================================= RIGHT SIDE - FILTERS ================================================= */}
-          <div className="flex flex-wrap items-center gap-2">
-            {' '}
-            {/* FROM DATE */}
-            <div className="flex items-center gap-2">
-              {' '}
-              <label className="text-xs text-slate-500">From</label>{' '}
-              <input
-                type="datetime-local"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className=" h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-700 outline-none transition focus:border-sky-500 focus:ring-1 focus:ring-sky-200 "
-              />{' '}
-            </div>{' '}
-            <span className="text-xs text-slate-400">→</span> {/* TO DATE */}
-            <div className="flex items-center gap-2">
-              {' '}
-              <label className="text-xs text-slate-500">To</label>{' '}
-              <input
-                type="datetime-local"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className=" h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-700 outline-none transition focus:border-sky-500 focus:ring-1 focus:ring-sky-200 "
-              />{' '}
-            </div>{' '}
-            {/* SOURCE */}
-            <div className="relative">
-              {' '}
-              <select
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-                className=" h-8 appearance-none rounded border border-slate-300 bg-white py-1 pl-3 pr-8 text-xs text-slate-700 outline-none transition focus:border-sky-500 focus:ring-1 focus:ring-sky-200 "
-              >
-                {' '}
-                <option>All Sources</option>{' '}
-                {Array.from(
-                  new Set(standingAlarms.map((a) => a.sourceName))
-                ).map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </select>{' '}
-              <ChevronDown
-                size={14}
-                className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"
-              />{' '}
-            </div>{' '}
-            {/* REFRESH */}
-            <button
-              type="button"
-              onClick={fetchData}
-              disabled={loading}
-              className=" flex h-8 items-center gap-2 rounded bg-sky-600 px-3 text-xs font-medium text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60 "
-            >
-              {' '}
-              <RefreshCw
-                size={14}
-                className={loading ? 'animate-spin' : ''}
-              />{' '}
-              Refresh{' '}
-            </button>{' '}
-            {/* AUTO REFRESH */}
-            <button
-              type="button"
-              onClick={() => setAutoRefresh((v) => !v)}
-              className={` flex h-8 items-center gap-2 rounded border px-3 text-xs font-medium transition ${autoRefresh ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-300 bg-white text-slate-500 hover:bg-slate-50'} `}
-            >
-              {' '}
-              <span
-                className={` h-2 w-2 rounded-full ${autoRefresh ? 'bg-emerald-500' : 'bg-slate-300'} `}
-              />{' '}
-              Auto Refresh{' '}
-            </button>{' '}
-          </div>{' '}
-        </header>{' '}
-        {error && (
-          <div className="border-b border-red-200 bg-red-50 px-5 py-2 text-xs text-red-700">
-            {' '}
-            Failed to load alarm data{error ? `: ${error}` : ''}. Showing "Data
-            not available" until the API responds.{' '}
+    <div className="flex min-w-0 flex-1 flex-col bg-slate-50">
+      {/* HEADER */}
+      <header className="flex min-h-[56px] flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-4 py-2 shadow-sm">
+        <div>
+          <h1 className="text-[18px] font-semibold text-slate-700">Summary</h1>
+          <p className="text-[12px] text-slate-400">
+            Plant-wide alarm overview across all collectors
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="hidden text-right sm:block">
+            <p className="text-[11px] font-medium text-slate-400">
+              Last updated
+            </p>
+            <p className="text-[12px] font-medium text-slate-600">Just now</p>
           </div>
-        )}
-        {!error && loading && !hasData && (
-          <div className="border-b border-blue-200 bg-blue-50 px-5 py-2 text-xs text-blue-700 mt-3">
-            {' '}
-            Loading alarm data…{' '}
+          <button
+            type="button"
+            className="flex h-9 items-center gap-2 rounded bg-sky-600 px-3 text-[14px] font-medium text-white transition hover:bg-sky-700"
+          >
+            <RefreshCw size={16} />
+            Refresh
+          </button>
+        </div>
+      </header>
+
+      <main className="mt-3 flex-1 space-y-2 overflow-y-auto">
+        {/* HERO: health gauge + stat tiles */}
+        <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
+          <div className="relative overflow-hidden rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+            <div
+              className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full opacity-10"
+              style={{ background: health.color }}
+            />
+            <div className="flex items-center justify-between">
+              <h2 className="text-[16px] font-semibold text-slate-700">
+                Alarm system health
+              </h2>
+              <Gauge size={18} className="text-slate-300" />
+            </div>
+
+            <Chart
+              options={gaugeOptions}
+              series={[HEALTH_SCORE]}
+              type="radialBar"
+              height={230}
+            />
+
+            <p className="-mt-4 text-center text-[12px] text-slate-500">
+              <span className={`font-semibold ${health.text}`}>
+                {health.label}
+              </span>{' '}
+              · based on ISA 18.2 KPIs for today
+            </p>
           </div>
-        )}
-        {/* Content */}
-        <main className="flex-1 space-y-2 overflow-y-auto mt-3">
-          {' '}
-          {/* KPI row */}
-          {hasData && summary ? (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-              {' '}
-              <KpiCard
-                label="Total Alarms"
-                value={summary.totalAlarmActivations.toLocaleString()}
-                icon={<Bell size={16} />}
-                accent="slate"
-              />{' '}
-              <KpiCard
-                label="Acknowledged"
-                value={summary.acknowledgedAlarms.toLocaleString()}
-                icon={<CheckCircle2 size={16} />}
-                accent="green"
-              />{' '}
-              <KpiCard
-                label="Unacknowledged"
-                value={summary.unacknowledgedAlarms.toLocaleString()}
-                icon={<XCircle size={16} />}
-                accent="red"
-              />{' '}
-              <KpiCard
-                label="Unresolved"
-                value={summary.unresolvedAlarms.toLocaleString()}
-                icon={<AlertTriangle size={16} />}
-                accent="amber"
-              />{' '}
-              <KpiCard
-                label="MTTA"
-                value={fmtNum(summary.mttA_Minutes)}
-                suffix="min"
-                icon={<Clock size={16} />}
-                accent="blue"
-              />{' '}
-              <KpiCard
-                label="MTTR"
-                value={fmtNum(summary.mttR_Minutes)}
-                suffix="min"
-                icon={<Clock size={16} />}
-                accent="blue"
-              />{' '}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              {' '}
-              <EmptyState message="KPI data not available" height={80} />{' '}
-            </div>
-          )}
-          {/* Rate + severity + category */}
-          <div className="grid grid-cols-1 gap-2 lg:grid-cols-4">
-            {' '}
-            <SectionCard title="Alarm rate / hour" className="lg:col-span-3">
-              {' '}
-              {hasData && rateChartData.length > 0 ? (
-                <>
-                  {' '}
-                  <div className="text-xs text-slate-400">
-                    {' '}
-                    Avg rate:{' '}
-                    <span className="font-medium text-slate-600">
-                      {' '}
-                      {fmtNum(summary?.alarmRatePerHour, 1)}
-                      /hr{' '}
-                    </span>{' '}
-                  </div>{' '}
-                  <Chart
-                    options={rateBarOptions}
-                    series={rateBarSeries}
-                    type="bar"
-                    height={220}
-                  />{' '}
-                </>
-              ) : (
-                <EmptyState height={220} />
-              )}
-            </SectionCard>{' '}
-            <SectionCard title="Standing alarms by severity">
-              {' '}
-              {hasData && severityPie.length > 0 ? (
-                <>
-                  {' '}
-                  <Chart
-                    options={severityDonutOptions}
-                    series={severityDonutSeries}
-                    type="donut"
-                    height={220}
-                  />{' '}
-                  <div className="mt-2 space-y-1">
-                    {' '}
-                    {severityPie.map((s) => (
-                      <div
-                        key={s.name}
-                        className="flex items-center justify-between text-xs"
-                      >
-                        {' '}
-                        <span className="flex items-center gap-1.5 text-slate-600">
-                          {' '}
-                          <span
-                            className="h-2 w-2 rounded-full"
-                            style={{
-                              backgroundColor: s.color,
-                            }}
-                          />{' '}
-                          {s.name}
-                        </span>{' '}
-                        <span className="font-medium text-slate-700">
-                          {' '}
-                          {s.value}
-                        </span>{' '}
-                      </div>
-                    ))}
-                  </div>{' '}
-                </>
-              ) : (
-                <EmptyState height={220} />
-              )}
-            </SectionCard>{' '}
-          </div>{' '}
-          <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
-            {' '}
-            <SectionCard title="Standing alarms by group">
-              {' '}
-              {hasData && groupPathBars.length > 0 ? (
-                <Chart
-                  options={groupBarOptions}
-                  series={groupBarSeries}
-                  type="bar"
-                  height={180}
-                />
-              ) : (
-                <EmptyState height={180} />
-              )}
-            </SectionCard>{' '}
-            {/* Chattering alarms */}
-            <SectionCard title="Chattering alarms">
-              {' '}
-              {hasData ? (
-                <div className="overflow-x-auto">
-                  {' '}
-                  <table className="w-full text-left text-xs">
-                    {' '}
-                    <thead>
-                      {' '}
-                      <tr className="text-slate-400">
-                        {' '}
-                        <th className="pb-2 font-medium">Source</th>{' '}
-                        <th className="pb-2 font-medium">Condition</th>{' '}
-                        <th className="pb-2 font-medium text-right">Changes</th>{' '}
-                        <th className="pb-2 font-medium text-right">
-                          {' '}
-                          Duration{' '}
-                        </th>{' '}
-                      </tr>{' '}
-                    </thead>{' '}
-                    <tbody className="divide-y divide-slate-100">
-                      {chatteringAlarms.length === 0 && (
-                        <tr>
-                          <td
-                            colSpan={4}
-                            className="py-4 text-center text-slate-400"
-                          >
-                            No chattering alarms in range
-                          </td>
-                        </tr>
-                      )}
-                      {chatteringAlarms.map((c, i) => (
-                        <tr key={i} className="text-slate-700">
-                          <td className="py-2 font-medium">{c.sourceName}</td>
-                          <td className="py-2 text-slate-500">
-                            {c.conditionName}
-                          </td>
-                          <td className="py-2 text-right">
-                            <span className="rounded bg-red-50 px-1.5 py-0.5 font-medium text-red-600">
-                              {c.stateChangeCount}
-                            </span>
-                          </td>
-                          <td className="py-2 text-right text-slate-500">
-                            {fmtDuration(c.durationSeconds / 60)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>{' '}
-                  </table>{' '}
-                </div>
-              ) : (
-                <EmptyState />
-              )}
-            </SectionCard>{' '}
-            {/* Bad actors */}
-            <SectionCard title="Top bad actors">
-              {' '}
-              {hasData ? (
-                <div className="max-h-[220px] overflow-y-auto">
-                  {' '}
-                  <table className="w-full text-left text-xs">
-                    {' '}
-                    <thead className="sticky top-0 bg-white">
-                      {' '}
-                      <tr className="text-slate-400">
-                        {' '}
-                        <th className="pb-2 font-medium">Source</th>{' '}
-                        <th className="pb-2 font-medium text-right">Count</th>{' '}
-                        <th className="pb-2 font-medium text-right">
-                          MTTA
-                        </th>{' '}
-                      </tr>{' '}
-                    </thead>{' '}
-                    <tbody className="divide-y divide-slate-100">
-                      {badActors.length === 0 && (
-                        <tr>
-                          <td
-                            colSpan={3}
-                            className="py-4 text-center text-slate-400"
-                          >
-                            No bad actors in range
-                          </td>
-                        </tr>
-                      )}
-                      {badActors.map((b, i) => (
-                        <tr key={i} className="text-slate-700">
-                          <td className="py-2">
-                            <p className="font-medium">{b.sourceName}</p>
-                            <p className="text-[11px] text-slate-400">
-                              {b.conditionName}
-                            </p>
-                          </td>
-                          <td className="py-2 text-right font-medium">
-                            {b.alarmCount}
-                          </td>
-                          <td className="py-2 text-right text-slate-500">
-                            {fmtNum(b.avgMTTA_Minutes, 1)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>{' '}
-                  </table>{' '}
-                </div>
-              ) : (
-                <EmptyState />
-              )}
-            </SectionCard>{' '}
-          </div>{' '}
-          {/* Standing alarms table */}
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:col-span-2">
+            <StatTile
+              label="Collectors online"
+              value={`${totals.online}/${COLLECTORS.length}`}
+              hint="1 collector offline"
+              icon={Server}
+              iconClass="bg-sky-50 text-sky-600"
+            />
+            <StatTile
+              label="Active alarms"
+              value={totals.active}
+              hint="Across all collectors"
+              icon={BellRing}
+              iconClass="bg-red-50 text-red-600"
+            />
+            <StatTile
+              label="Unacknowledged"
+              value={totals.unacked}
+              hint="Waiting for operator"
+              icon={BellOff}
+              iconClass="bg-amber-50 text-amber-600"
+            />
+            <StatTile
+              label="Alarms today"
+              value={totals.today}
+              hint="Since 00:00"
+              icon={Activity}
+              iconClass="bg-emerald-50 text-emerald-600"
+            />
+          </div>
+        </div>
+
+        {/* ROW: trend + priority */}
+        <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
           <SectionCard
-            title="Standing alarms (> 30 min)"
+            title="Alarms per hour"
+            subtitle="Today, all collectors"
+            className="lg:col-span-2"
+          >
+            <Chart
+              options={hourlyOptions}
+              series={[{ name: 'Alarms', data: ALARMS_PER_HOUR }]}
+              type="area"
+              height={250}
+            />
+          </SectionCard>
+
+          <SectionCard
+            title="Priority distribution"
+            subtitle="Share of active alarms"
+          >
+            <Chart
+              options={priorityOptions}
+              series={PRIORITY.map((p) => p.value)}
+              type="donut"
+              height={190}
+            />
+            <div className="mt-2 space-y-1.5">
+              {PRIORITY.map((p) => (
+                <div
+                  key={p.key}
+                  className="flex items-center justify-between text-[13px]"
+                >
+                  <span className="flex items-center gap-1.5 text-slate-600">
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ background: p.color }}
+                    />
+                    {p.key}
+                  </span>
+                  <span className="font-semibold text-slate-700">
+                    {p.value}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+        </div>
+
+        {/* ROW: collectors table */}
+        <SectionCard
+          title="Collectors"
+          subtitle="Open live alarms or KPIs for a collector"
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-[13px]">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-400">
+                  <th className="py-2 pr-2 font-medium">Collector</th>
+                  <th className="py-2 pr-2 font-medium">Status</th>
+                  <th className="py-2 pr-2 text-center font-medium">Active</th>
+                  <th className="py-2 pr-2 text-center font-medium">Unacked</th>
+                  <th className="py-2 pr-2 font-medium">Last update</th>
+                  <th className="py-2 text-right font-medium">Open</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {COLLECTORS.map((c) => {
+                  const s = statusClasses(c.status);
+                  return (
+                    <tr
+                      key={c.id}
+                      className="text-slate-700 transition hover:bg-slate-50/70"
+                    >
+                      <td className="py-2.5 pr-2 font-medium">{c.name}</td>
+                      <td className="py-2.5 pr-2">
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${s.pill}`}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${s.dot}`}
+                          />
+                          {c.status}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-2 text-center font-semibold">
+                        {c.activeAlarms}
+                      </td>
+                      <td className="py-2.5 pr-2 text-center">
+                        <span
+                          className={
+                            c.unacked > 0
+                              ? 'font-semibold text-amber-600'
+                              : 'text-slate-400'
+                          }
+                        >
+                          {c.unacked}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-2 text-slate-500">
+                        {c.lastUpdate}
+                      </td>
+                      <td className="py-2.5">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openDashboard(LIVE_PATH, c)}
+                            className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 text-[12px] font-semibold text-slate-700 transition hover:bg-slate-50"
+                          >
+                            Live <ArrowUpRight size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openDashboard(KPI_PATH, c)}
+                            className="inline-flex h-8 items-center gap-1 rounded-md bg-sky-600 px-2.5 text-[12px] font-semibold text-white transition hover:bg-sky-700"
+                          >
+                            KPI <ArrowUpRight size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
+
+        {/* ROW: bad actors + recent alarms */}
+        <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+          <SectionCard
+            title="Top bad actors"
+            subtitle="Most frequent alarms today"
+          >
+            <div className="space-y-3">
+              {BAD_ACTORS.map((a) => (
+                <div key={a.name}>
+                  <div className="mb-1 flex items-center justify-between text-[13px]">
+                    <span className="truncate font-medium text-slate-700">
+                      {a.name}
+                    </span>
+                    <span className="font-semibold text-slate-600">
+                      {a.count}
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-blue-600"
+                      style={{ width: `${(a.count / maxActor) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            title="Recent alarms"
+            subtitle="Latest events"
             action={
-              <span className="text-xs text-slate-400">
-                {' '}
-                {hasData ? `${standingAlarms.length} active` : ''}
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
+                <AlertTriangle size={13} /> Sample data
               </span>
             }
           >
-            {' '}
-            {hasData ? (
-              <div className="overflow-x-auto">
-                {' '}
-                <table className="w-full text-left text-sm">
-                  {' '}
-                  <thead>
-                    {' '}
-                    <tr className="border-b border-slate-200 text-xs text-slate-400">
-                      {' '}
-                      <th className="py-2 pr-4 font-medium">Source</th>{' '}
-                      <th className="py-2 pr-4 font-medium">Severity</th>{' '}
-                      <th className="py-2 pr-4 font-medium">Priority</th>{' '}
-                      <th className="py-2 pr-4 font-medium">Active since</th>{' '}
-                      <th className="py-2 pr-4 font-medium">Active for</th>{' '}
-                      <th className="py-2 pr-4 font-medium">Acked</th>{' '}
-                      <th className="py-2 font-medium">Message</th>{' '}
-                    </tr>{' '}
-                  </thead>{' '}
-                  <tbody className="divide-y divide-slate-100">
-                    {standingAlarms.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={7}
-                          className="py-6 text-center text-slate-400"
-                        >
-                          No standing alarms in range
-                        </td>
-                      </tr>
-                    )}
-                    {standingAlarms.map((a) => {
-                      const sev = severityInfo(a.severity);
-                      return (
-                        <tr key={a.eventID} className="text-slate-700">
-                          <td className="py-2.5 pr-4 font-medium">
-                            {a.sourceName}
-                          </td>
-                          <td className="py-2.5 pr-4">
-                            <span
-                              className={`rounded px-2 py-0.5 text-xs font-medium ${sev.bg} ${sev.text}`}
-                            >
-                              {sev.label}
-                            </span>
-                          </td>
-                          <td className="py-2.5 pr-4">
-                            <span
-                              className={`rounded px-2 py-0.5 text-xs font-medium ${priorityBadge(a.priority)}`}
-                            >
-                              P{a.priority}
-                            </span>
-                          </td>
-                          <td className="py-2.5 pr-4 text-slate-500">
-                            {fmtTime(a.activeSince)}
-                          </td>
-                          <td className="py-2.5 pr-4 text-slate-500">
-                            {fmtDuration(a.standingMinutes)}
-                          </td>
-                          <td className="py-2.5 pr-4">
-                            {a.acked ? (
-                              <CheckCircle2
-                                size={16}
-                                className="text-emerald-500"
-                              />
-                            ) : (
-                              <XCircle size={16} className="text-red-400" />
-                            )}
-                          </td>
-                          <td className="py-2.5 text-slate-600">{a.message}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>{' '}
-                </table>{' '}
-              </div>
-            ) : (
-              <EmptyState height={200} />
-            )}
-          </SectionCard>{' '}
-        </main>{' '}
-      </div>{' '}
-    </>
+            <ul className="divide-y divide-slate-100">
+              {RECENT_ALARMS.map((a, i) => (
+                <li key={i} className="flex items-center gap-3 py-2.5">
+                  <span
+                    className={`inline-flex min-w-[30px] items-center justify-center rounded-md border px-2 py-0.5 text-[11px] font-bold ${priorityClass(a.priority)}`}
+                  >
+                    {a.priority}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-semibold text-slate-700">
+                      {a.source}
+                    </p>
+                    <p className="truncate text-[12px] text-slate-500">
+                      {a.message}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-[12px] text-slate-400">
+                    {a.time}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </SectionCard>
+        </div>
+      </main>
+    </div>
   );
 }

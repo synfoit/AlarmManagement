@@ -9,26 +9,25 @@ import Home from '../components/Home';
 
 import UserMaster from '../components/UserMaster';
 import UserList from '../components/UserList';
-import Report from '../components/Report';
-
 import NotFound from '../components/NotFound';
-import BlenderMaster from '../components/BlenderMaster';
-import BlenderList from '../components/BlenderList';
 
-import BaseOilReport from '../components/reports/BaseOilReport';
-import ProductListReport from '../components/reports/ProductListReport';
-import RmCodeWiseReport from '../components/reports/RmCodeWiseReport';
-import TankWiseReport from '../components/reports/TankWiseReport';
-import PiggingReport from '../components/reports/PiggingReport';
-import CumulativeFamilyWiseReport from '../components/reports/CumulativeFamilyWiseReport';
-import CumulativeBlenderWiseReport from '../components/reports/CumulativeBlenderWiseReport';
-import DetailBatchReport from '../components/reports/DetailBatchReport';
-import BlenderWiseConsumptionReport from '../components/reports/BlenderWiseConsumptionReport';
-import DosingReport from '../components/reports/DosingReport';
 import ConnectorSettings from '../components/Connectorsettings';
 import AlarmKPIDashboard from '../components/alarmKPIDashboard';
 import RationalizationKpiDashboard from '../components/rationalizationKpiDashboard';
 import ShiftWiseAlarmSummary from '../components/shiftWiseAlarmSummary';
+import ReportsPage from '../components/ReportsPage';
+import PlantMaster from '../components/PlantMaster';
+import AreaMaster from '../components/AreaMAster';
+import ConsoleMaster from '../components/ConsoleMaster';
+import SourceMaster from '../components/SourceMaster';
+import EmailConfiguration from '../components/EmailConfiguration';
+import LiveDashboard from '../components/liveDashboard';
+
+import ConnectionList from '../components/ConnectionList';
+import ParsingConfig from '../components/ParsingConfig';
+import LookUpMaster from '../components/LookUpMaster';
+import CriticalTagConfigMaster from '../components/CriticalTagConfigMaster';
+import CriticalTagDashboard from '../components/CriticalTagDashboard';
 
 export default function AppRoutes() {
   const isAuthenticated = useSelector(
@@ -52,6 +51,7 @@ export default function AppRoutes() {
       >
         <Route index element={<Navigate to="home" replace />} />
         <Route path="home" element={<Home />} />
+        <Route path="live-dashboard" element={<LiveDashboard />} />
         <Route path="alarm-kpi-dashboard" element={<AlarmKPIDashboard />} />
         <Route
           path="rationalization-kpi-dashboard"
@@ -61,35 +61,29 @@ export default function AppRoutes() {
           path="shift-wise-alarm-summary"
           element={<ShiftWiseAlarmSummary />}
         />
+        <Route
+          path="critical-tag-dashboard"
+          element={<CriticalTagDashboard />}
+        />
 
         <Route path="manage-user" element={<UserMaster />} />
         <Route path="manage-user/:id" element={<UserMaster />} />
         <Route path="user-list" element={<UserList />} />
 
-        <Route path="manage-blender" element={<BlenderMaster />} />
-        <Route path="manage-blender/:id" element={<BlenderMaster />} />
-        <Route path="blender-list" element={<BlenderList />} />
-        <Route path="connector-settings" element={<ConnectorSettings />} />
-
-        <Route path="report" element={<Report />} />
-        <Route path="base-oil-report" element={<BaseOilReport />} />
-        <Route path="product-list-report" element={<ProductListReport />} />
-        <Route path="dosing-report" element={<DosingReport />} />
+        <Route path="reports" element={<ReportsPage />} />
+        <Route path="connection-setting" element={<ConnectorSettings />} />
+        <Route path="connection-setting/:id" element={<ConnectorSettings />} />
+        <Route path="connection-list" element={<ConnectionList />} />
+        <Route path="parsing-config" element={<ParsingConfig />} />
+        <Route path="email-configuration" element={<EmailConfiguration />} />
+        <Route path="plant" element={<PlantMaster />} />
+        <Route path="area" element={<AreaMaster />} />
+        <Route path="console" element={<ConsoleMaster />} />
+        <Route path="source" element={<SourceMaster />} />
+        <Route path="lookup" element={<LookUpMaster />} />
         <Route
-          path="cumulative-blender-wise-report"
-          element={<CumulativeBlenderWiseReport />}
-        />
-        <Route
-          path="cumulative-family-wise-report"
-          element={<CumulativeFamilyWiseReport />}
-        />
-        <Route path="detail-batch-report" element={<DetailBatchReport />} />
-        <Route path="pigging-report" element={<PiggingReport />} />
-        <Route path="rm-code-wise-report" element={<RmCodeWiseReport />} />
-        <Route path="tank-wise-report" element={<TankWiseReport />} />
-        <Route
-          path="blender-wise-consumption-report"
-          element={<BlenderWiseConsumptionReport />}
+          path="critical-tags-config"
+          element={<CriticalTagConfigMaster />}
         />
 
         {/* <Route path="*" element={<Navigate to="home" replace />} /> */}

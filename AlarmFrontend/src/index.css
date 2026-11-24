@@ -1,30 +1,30 @@
 @font-face {
-  font-family: "Poppins";
+  font-family: 'Poppins';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url("/fonts/Poppins/Poppins-Light.ttf") format("truetype");
+  src: url('/fonts/Poppins/Poppins-Light.ttf') format('truetype');
 }
 @font-face {
-  font-family: "Poppins";
+  font-family: 'Poppins';
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url("/fonts/Poppins/Poppins-Medium.ttf") format("truetype");
+  src: url('/fonts/Poppins/Poppins-Medium.ttf') format('truetype');
 }
 @font-face {
-  font-family: "Poppins";
+  font-family: 'Poppins';
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: url("/fonts/Poppins/Poppins-Regular.ttf") format("truetype");
+  src: url('/fonts/Poppins/Poppins-Regular.ttf') format('truetype');
 }
 @font-face {
-  font-family: "Poppins";
+  font-family: 'Poppins';
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: url("/fonts/Poppins/Poppins-Bold.ttf") format("truetype");
+  src: url('/fonts/Poppins/Poppins-Bold.ttf') format('truetype');
 }
 
 /* then your Tailwind layers */
@@ -36,7 +36,52 @@
   /* apply it globally */
   html,
   body {
-    font-family: "Poppins", ui‑sans‑serif, system-ui, sans-serif;
+    font-family: 'Poppins', ui‑sans‑serif, system-ui, sans-serif;
     @apply tracking-wide;
+  }
+}
+/* Aa global CSS file ma (index.css / App.css) add karo */
+
+@keyframes criticalBlink {
+  0%,
+  100% {
+    background-color: rgb(254 242 242); /* red-50 */
+  }
+  50% {
+    background-color: rgb(252 165 165); /* red-300 */
+  }
+}
+
+.critical-row-blink {
+  animation: criticalBlink 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .critical-row-blink {
+    animation: none;
+    background-color: rgb(254 226 226); /* red-100 */
+  }
+}
+
+/* Aa global CSS file ma (index.css / App.css) add karo */
+
+/* Navi aavel critical row thodi vaar mate red flash thay, pachhi normal */
+@keyframes criticalRowIn {
+  0% {
+    background-color: rgb(252 165 165); /* red-300 */
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.critical-row-new {
+  animation: criticalRowIn 2.5s ease-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .critical-row-new {
+    animation: none;
+    background-color: rgb(254 226 226); /* red-100 */
   }
 }

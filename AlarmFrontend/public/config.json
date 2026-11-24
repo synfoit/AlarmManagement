@@ -1,4 +1,4 @@
 {
-  "API_BASE_URL": "http://192.168.1.102:7072/api/",
-  "REPORT_BASE_URL": "http://192.168.1.102/ReportServer/Pages/ReportViewer.aspx"
+  "API_BASE_URL": "http://192.168.1.47:7072/api/",
+  "REPORT_BASE_URL": "http://192.168.1.47/ReportServer/Pages/ReportViewer.aspx"
 }
